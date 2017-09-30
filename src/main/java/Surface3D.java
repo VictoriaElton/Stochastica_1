@@ -12,12 +12,13 @@ import org.jzy3d.plot3d.rendering.canvas.Quality;
 import java.util.Map;
 
 public class Surface3D extends AbstractAnalysis {
-    private static Core core;// = new Core(0.2, 0.2, 0.2, 0.2, 0.2, 100, 5, 5, 2, 3);
+    private static MainFrame.Core core;// = new Core(0.2, 0.2, 0.2, 0.2, 0.2, 100, 5, 5, 2, 3);
     private Map<String, Double> sleep;
 
-    public Surface3D(Core core) {
+    public Surface3D(MainFrame.Core core) {
         this.core = core;
     }
+
 
     /*public static void main(String[] args) throws Exception {
         AnalysisLauncher.open(new Surface3D());

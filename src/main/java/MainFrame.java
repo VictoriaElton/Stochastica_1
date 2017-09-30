@@ -5,13 +5,19 @@ import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.jzy3d.analysis.AnalysisLauncher;
 
+import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * @author Victoria
  */
-public class MainFrame extends javax.swing.JFrame {
+public class MainFrame extends javax.swing.JFrame implements PropertyChangeListener {
+
 
     // Variables declaration - do not modify
     private javax.swing.JButton jButton1;
@@ -49,7 +55,7 @@ public class MainFrame extends javax.swing.JFrame {
     private ChartPanel lrChart;
     private JFreeChart upDownBarChart;
     private JFreeChart lrBarChart;
-    // End of variables declaration
+    private boolean isStop = false;
 
     /**
      * Creates new form MainFrame
@@ -371,6 +377,7 @@ public class MainFrame extends javax.swing.JFrame {
         gridBagConstraints.insets = new java.awt.Insets(8, 6, 2, 12);
         jPanelInputs.add(jButtonRun, gridBagConstraints);
 
+        jProgressBar1.setValue(0);
         jProgressBar1.setStringPainted(true);
         jProgressBar1.setPreferredSize(new java.awt.Dimension(146, 20));
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -384,6 +391,7 @@ public class MainFrame extends javax.swing.JFrame {
         jPanelInputs.add(jProgressBar1, gridBagConstraints);
 
         jButton1.setText("Stop");
+        jButton1.setCursor(Cursor.getDefaultCursor());
         jButton1.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jButtonStopActionPerformed(evt);
@@ -475,12 +483,54 @@ public class MainFrame extends javax.swing.JFrame {
         gridBagConstraints.weighty = 0.1;
         jPanelLeftRightChart.add(lrChart, gridBagConstraints);
 
-        getContentPane().setPreferredSize(new Dimension(733,570));
+        getContentPane().setPreferredSize(new Dimension(733, 570));
         pack();
     }// </editor-fold>
 
     private void jButtonStopActionPerformed(ActionEvent evt) {
+        isStop = true;
+        core.done();
+    }
 
+    private void jButtonRunActionPerformed(java.awt.event.ActionEvent evt) {
+        jButtonRun.setEnabled(false);
+        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        if (!isStop) {
+            core = new Core(Double.parseDouble(jTextFieldUp.getText()),
+                    Double.parseDouble(jTextFieldDown.getText()),
+                    Double.parseDouble(jTextFieldLeft.getText()),
+                    Double.parseDouble(jTextFieldRight.getText()),
+                    Double.parseDouble(jTextFieldSleep.getText()),
+                    Integer.parseInt(jTextFieldNst.getText()),
+                    Integer.parseInt(jTextFieldN.getText()),
+                    Integer.parseInt(jTextFieldM.getText()),
+                    Integer.parseInt(jTextFieldN0.getText()),
+                    Integer.parseInt(jTextFieldM0.getText()),
+                    jButtonRun);
+
+
+            jProgressBar1.setValue(jProgressBar1.getMinimum());
+            core.addPropertyChangeListener(this);
+            core.execute();
+        } else {
+            isStop = false;
+        }
+
+    }
+
+    private void jButtonGetSurfaceActionPerformed(java.awt.event.ActionEvent evt) throws Exception {
+        AnalysisLauncher.open(new Surface3D(core));
+    }
+
+    private void jButtonOkDialogActionPerformed(java.awt.event.ActionEvent evt) {
+        // TODO add your handling code here:
+    }
+
+    public void propertyChange(PropertyChangeEvent evt) {
+        if ("progress" == evt.getPropertyName()) {
+            int progress = (Integer) evt.getNewValue();
+            jProgressBar1.setValue(progress);
+        }
     }
 
     private void jTextFieldSleepActionPerformed(java.awt.event.ActionEvent evt) {
@@ -503,61 +553,237 @@ public class MainFrame extends javax.swing.JFrame {
         // TODO add your handling code here:
     }
 
-    private void jButtonRunActionPerformed(java.awt.event.ActionEvent evt) {
-        core = new Core(Double.parseDouble(jTextFieldUp.getText()),
-                Double.parseDouble(jTextFieldDown.getText()),
-                Double.parseDouble(jTextFieldLeft.getText()),
-                Double.parseDouble(jTextFieldRight.getText()),
-                Double.parseDouble(jTextFieldSleep.getText()),
-                Integer.parseInt(jTextFieldNst.getText()),
-                Integer.parseInt(jTextFieldN.getText()),
-                Integer.parseInt(jTextFieldM.getText()),
-                Integer.parseInt(jTextFieldN0.getText()),
-                Integer.parseInt(jTextFieldM0.getText()));
+    class Core extends SwingWorker<Void, Void> {
+        private Double up;
+        private Double down;
+        private Double left;
+        private Double right;
+        private Double sleep;
+        private Integer Nst;
+        private Integer N;
+        private Integer M;
+        private Integer n0;
+        private Integer m0;
+        private int[] countUp;
+        private int[] countDown;
+        private int[] countLeft;
+        private int[] countRight;
+        private Map<String, Double> countSleep;
+        private JButton jButtonRun;
 
-        jProgressBar1.setMaximum(Integer.parseInt(jTextFieldNst.getText()));
+        public Core(Double up, Double down, Double left, Double right, Double sleep,
+                    Integer nst, Integer n, Integer m, Integer n0, Integer m0,
+                    JButton jButtonRun) {
+            this.up = up;
+            this.down = down;
+            this.left = left;
+            this.right = right;
+            this.sleep = sleep;
+            Nst = nst;
+            N = n;
+            M = m;
+            this.n0 = n0;
+            this.m0 = m0;
+            this.countUp = new int[N];
+            this.countDown = new int[N];
+            this.countLeft = new int[M];
+            this.countRight = new int[M];
+            countSleep = new TreeMap<String, Double>();
+            this.jButtonRun = jButtonRun;
+        }
 
-        core.run(jProgressBar1);
-        final String left = "Left";
-        final String right = "Right";
-        final String up = "Up";
-        final String down = "Down";
-        final DefaultCategoryDataset datasetUpDown = new DefaultCategoryDataset();
-        final DefaultCategoryDataset datasetRL = new DefaultCategoryDataset();
+        private void getProbabilityOfSleep() {
+            Double count = 0.0;
+            for (Double value : countSleep.values()) {
+                count += value;
+            }
 
-        datasetUpDown.addValue((core.getCountUp() / core.getSumProb()), up, up);
-        datasetUpDown.addValue((core.getCountDown() / core.getSumProb()), down, down);
+            Double index = 1 / count;
+            for (String key : countSleep.keySet()) {
+                countSleep.put(key, countSleep.get(key) * index);
+            }
 
-        datasetRL.addValue((core.getCountLeft() / core.getSumProb()), left, left);
-        datasetRL.addValue((core.getCountRight() / core.getSumProb()), right, right);
+        }
 
-        upDownBarChart = ChartFactory.createBarChart3D("",
-                "Boundary",
-                "Probability of stopping",
-                datasetUpDown,
-                PlotOrientation.VERTICAL,
-                false, true, false);
+        public int[] getCountUp() {
+            return countUp;
+        }
+
+        public int[] getCountDown() {
+            return countDown;
+        }
+
+        public int[] getCountLeft() {
+            return countLeft;
+        }
+
+        public int[] getCountRight() {
+            return countRight;
+        }
+
+        public Integer getN() {
+            return N;
+        }
+
+        public Integer getM() {
+            return M;
+        }
+
+        public Double getSumProb() {
+            double result = 0.0;
+            for (int i = 0; i < countUp.length; i++) {
+                result += countUp[i];
+            }
+
+            for (int i = 0; i < countDown.length; i++) {
+                result += countDown[i];
+            }
+
+            for (int i = 0; i < countLeft.length; i++) {
+                result += countLeft[i];
+            }
+
+            for (int i = 0; i < countRight.length; i++) {
+                result += countRight[i];
+            }
+            return result;
+        }
+
+        public Map<String, Double> getCountSleep() {
+            return countSleep;
+        }
+
+        protected Void doInBackground() throws Exception {
+            MethodOfIntervals methodOfIntervals = new MethodOfIntervals(up, down, left, right, sleep);
+            setProgress(0);
+            int countIteration = Nst / 100;
+            int countProgress = 0;
+            for (int i = 0; i < Nst; i++) {
+                while (isStop) {
+                    Thread.sleep(1000);
+                }
+                if (i == countIteration) {
+                    countIteration += Nst / 100;
+                    countProgress++;
+                    setProgress(countProgress);
+                }
+                int tmpN = n0;
+                int tmpM = m0;
+                while (true) {
+                    Steps step = methodOfIntervals.getStep(methodOfIntervals.getIntervals());
+                    boolean flag = false;
+                    switch (step.getNumberOfField()) {
+                        case 1: {
+                            tmpM++;
+                            break;
+                        }
+                        case 2: {
+                            tmpM--;
+                            break;
+                        }
+                        case 3: {
+                            tmpN--;
+                            break;
+                        }
+                        case 4: {
+                            tmpN++;
+                            break;
+                        }
+                        case 5: {
+                            flag = true;
+                            String key = tmpN + "," + tmpM;
+                            if (countSleep.containsKey(key)) {
+                                countSleep.put(key, countSleep.get(key) + 1);
+                            } else {
+                                countSleep.put(key, 1.0);
+                            }
+                            break;
+                        }
+                    }
+
+                    if (flag) {
+                        break;
+                    }
+
+                    if (tmpM > M) {
+                        countUp[tmpN-1]+=1;
+                        break;
+                    } else {
+                        if (tmpM < 0) {
+                            countDown[tmpN-1]+=1;
+                            break;
+                        } else {
+                            if (tmpN > N) {
+                                countRight[tmpM-1]+=1;
+                                break;
+                            } else {
+                                if (tmpN < 0) {
+                                    countLeft[tmpM-1]+=1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            getProbabilityOfSleep();
+            setProgress(100);
+
+            return null;
+        }
+
+        @Override
+        public void done() {
+            if (!isStop) {
+                Toolkit.getDefaultToolkit().beep();
+            }
+            setCursor(null);
+            jButtonRun.setEnabled(true);
+
+            final String left = "Left";
+            final String right = "Right";
+            final String up = "Up";
+            final String down = "Down";
+            final DefaultCategoryDataset datasetUpDown = new DefaultCategoryDataset();
+            final DefaultCategoryDataset datasetRL = new DefaultCategoryDataset();
+            Double sum=getSumProb();
+
+            for (int i = 0; i < countUp.length; i++) {
+                datasetUpDown.addValue(countUp[i] / sum, up, (i + 1) + "");
+            }
+
+            for (int i = 0; i < countDown.length; i++) {
+                datasetUpDown.addValue(countDown[i] / sum, down, (i + 1) + "");
+            }
+
+            for (int i = 0; i < countLeft.length; i++) {
+                datasetRL.addValue(countLeft[i] / sum, left, (i + 1) + "");
+            }
+
+            for (int i = 0; i < countRight.length; i++) {
+                datasetRL.addValue(countRight[i] / sum, right, (i + 1) + "");
+            }
+            upDownBarChart = ChartFactory.createBarChart3D("",
+                    "Boundary",
+                    "Probability of stopping",
+                    datasetUpDown,
+                    PlotOrientation.VERTICAL,
+                    true, true, false);
 
 
-        upDownChart.setChart(upDownBarChart);
-        jPanelUpDownChart.validate();
+            upDownChart.setChart(upDownBarChart);
+            jPanelUpDownChart.validate();
 
-        lrBarChart = ChartFactory.createBarChart3D("",
-                "Boundary",
-                "Probability of stopping",
-                datasetRL,
-                PlotOrientation.VERTICAL,
-                false, true, false);
+            lrBarChart = ChartFactory.createBarChart3D("",
+                    "Boundary",
+                    "Probability of stopping",
+                    datasetRL,
+                    PlotOrientation.VERTICAL,
+                    true, true, false);
 
-        lrChart.setChart(lrBarChart);
-        jPanelLeftRightChart.validate();
-    }
+            lrChart.setChart(lrBarChart);
+            jPanelLeftRightChart.validate();
+        }
 
-    private void jButtonGetSurfaceActionPerformed(java.awt.event.ActionEvent evt) throws Exception {
-        AnalysisLauncher.open(new Surface3D(core));
-    }
-
-    private void jButtonOkDialogActionPerformed(java.awt.event.ActionEvent evt) {
-        // TODO add your handling code here:
     }
 }
